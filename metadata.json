@@ -1,0 +1,6 @@
+{
+  "name": "BuziBuddy",
+  "description": "A sleek, modern chatbot interface with n8n integration, adaptive dark mode support, chat history, template drafts, and Gemini standby fallback.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
