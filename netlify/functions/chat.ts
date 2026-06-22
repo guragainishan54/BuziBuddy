@@ -1,35 +1,51 @@
 import { GoogleGenAI } from '@google/genai';
 
-export default async (req: Request) => {
-  if (req.method !== 'POST') {
-    return new Response(JSON.stringify({ error: 'Method not allowed' }), {
-      status: 405,
+export const handler = async (event: any, context: any) => {
+  if (event.httpMethod === 'OPTIONS') {
+    return {
+      statusCode: 200,
+      headers: {
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Headers': 'Content-Type',
+        'Access-Control-Allow-Methods': 'POST, OPTIONS'
+      },
+      body: ''
+    };
+  }
+
+  if (event.httpMethod !== 'POST') {
+    return {
+      statusCode: 405,
       headers: { 'Content-Type': 'application/json' },
-    });
+      body: JSON.stringify({ error: 'Method not allowed' }),
+    };
   }
 
   try {
-    const { message, history, n8nWebhookUrl, isN8NEnabled } = await req.json();
+    const body = event.body ? JSON.parse(event.body) : {};
+    const { message, history, n8nWebhookUrl, isN8NEnabled } = body;
 
     if (!message) {
-      return new Response(JSON.stringify({ error: 'Message payload is required' }), {
-        status: 400,
+      return {
+        statusCode: 400,
         headers: { 'Content-Type': 'application/json' },
-      });
+        body: JSON.stringify({ error: 'Message payload is required' }),
+      };
     }
 
     // Helper to call Gemini
     const runGeminiFallback = async (reason: string) => {
       const apiKey = process.env.GEMINI_API_KEY;
       if (!apiKey) {
-        return new Response(JSON.stringify({
-          output: 'Gemini API is not configured on Netlify. Please set GEMINI_API_KEY in your Netlify Environment Variables.',
-          mode: 'error',
-          reason: 'Gemini Client uninitialized (missing key)'
-        }), {
-          status: 550,
+        return {
+          statusCode: 200,
           headers: { 'Content-Type': 'application/json' },
-        });
+          body: JSON.stringify({
+            output: 'Gemini API is not configured on Netlify. Please set GEMINI_API_KEY in your Netlify Environment Variables.',
+            mode: 'error',
+            reason: 'Gemini Client uninitialized (missing key)'
+          })
+        };
       }
 
       const ai = new GoogleGenAI({
@@ -55,14 +71,15 @@ export default async (req: Request) => {
         }
       });
 
-      return new Response(JSON.stringify({
-        output: response.text || "I didn't receive an answer. Please try again.",
-        mode: 'gemini',
-        reason
-      }), {
-        status: 200,
+      return {
+        statusCode: 200,
         headers: { 'Content-Type': 'application/json' },
-      });
+        body: JSON.stringify({
+          output: response.text || "I didn't receive an answer. Please try again.",
+          mode: 'gemini',
+          reason
+        })
+      };
     };
 
     if (isN8NEnabled && n8nWebhookUrl) {
@@ -105,13 +122,14 @@ export default async (req: Request) => {
           throw new Error('Received empty response from n8n');
         }
 
-        return new Response(JSON.stringify({
-          output: replyText,
-          mode: 'n8n',
-        }), {
-          status: 200,
+        return {
+          statusCode: 200,
           headers: { 'Content-Type': 'application/json' },
-        });
+          body: JSON.stringify({
+            output: replyText,
+            mode: 'n8n',
+          })
+        };
 
       } catch (err: any) {
         return await runGeminiFallback(`n8n webhook error: ${err.message || 'Error'}`);
@@ -121,14 +139,10 @@ export default async (req: Request) => {
     }
 
   } catch (err: any) {
-    return new Response(JSON.stringify({ error: err.message || 'Internal Server Error' }), {
-      status: 500,
+    return {
+      statusCode: 500,
       headers: { 'Content-Type': 'application/json' },
-    });
+      body: JSON.stringify({ error: err.message || 'Internal Server Error' }),
+    };
   }
-};
-
-// Netlify Functions configuration to map directly to /api/chat
-export const config = {
-  path: '/api/chat'
 };
